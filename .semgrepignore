@@ -1,0 +1,9 @@
+tests/
+test_*.py
+*_test.py
+node_modules/
+venv/
+.venv/
+*.min.js
+*.sarif
+migrations/

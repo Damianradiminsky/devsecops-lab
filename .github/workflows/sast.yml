@@ -1,0 +1,58 @@
+# .github/workflows/sast.yml
+name: SAST — Semgrep
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  security-events: write
+  contents: read
+  actions: read
+
+jobs:
+  semgrep:
+    name: Semgrep SAST Scan
+    runs-on: ubuntu-latest
+
+    container:
+      image: semgrep/semgrep
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Semgrep scan
+        run: |
+          semgrep ci \
+            --config p/owasp-top-ten \
+            --config p/python \
+            --config p/secrets \
+            --sarif \
+            --output semgrep.sarif \
+            --error
+        continue-on-error: true
+
+      - name: Subir resultados a GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Fallar si hay findings críticos
+        run: |
+          FINDINGS=$(cat semgrep.sarif | python3 -c "
+          import json,sys
+          data=json.load(sys.stdin)
+          highs=[r for r in data['runs'][0]['results']
+                 if r.get('level') in ['error','warning']]
+          print(len(highs))
+          ")
+          echo "Findings encontrados: $FINDINGS"
+          if [ "$FINDINGS" -gt "0" ]; then
+            echo "Pipeline bloqueado por findings SAST"
+            exit 1
+          fi
